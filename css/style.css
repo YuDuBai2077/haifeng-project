@@ -1,0 +1,115 @@
+body{
+    background-color:#f7fff7;
+    padding-top:56px;
+}
+@media (max-width:768px) {
+    .banner-img {
+        aspect-ratio: 16 / 9;
+    }
+    .farm_photo{
+        height: min(85vw, 480px);
+    }
+}
+.banner-img{
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+}
+.card-img-top{
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+}
+.scroll-block{
+    scroll-margin-top:90px;
+}
+.img-border{
+    /* border:6px solid #28a745; */
+    border-radius:8px;
+}
+.carousel-indicators [data-bs-target] {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #28a745;
+    margin: 0 5px;
+    border: none;
+}
+.carousel-indicators .active {
+    background-color: #157333;
+}
+.text-decoration-none{
+    text-decoration: none;
+}
+.mobile-banner-img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+}
+.yanxue_box{
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+}
+.yanxue_img{
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s;
+}
+.yanxue_img:hover {
+    transform: scale(1.1);
+}
+
+/* ar */
+.ar-wrap{ margin:28px 0; overscroll-behavior:contain }
+.ar-cap{ margin:10px 0 0; font-size:13px; color:#888; text-align:center }
+
+/* 农产品样式1 */
+.farm_photo{
+    height: clamp(340px, 50vw, 600px);
+    overflow: hidden;
+}
+.farm_photo img{
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    aspect-ratio: 1 / 1;
+    /* mask-image: radial-gradient(ellipse 76% 79% at 47% 50%, #000 58%, transparent 100%); */
+}
+
+/* 农产品样式2  */
+/* .farm_photo {
+  position: relative;
+  height: clamp(340px, 50vw, 600px);
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+
+/* 椭圆外围的发散效果 */
+/* .farm_photo_glow {
+  position: absolute;
+  width: 88%;
+  height: 82%;
+  border-radius: 50%;
+  background: rgba(156, 128, 98, .35);
+  filter: blur(28px);
+  z-index: -1;
+} */
+
+/* .farm_photo img {
+  display: block;
+  width: 82%;
+  height: 76%;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid rgba(156, 128, 98, .65);
+  box-shadow: 0 12px 35px rgba(35, 50, 43, .16);
+  transition: transform .7s ease;
+}
+
+.farm_photo:hover img {
+  transform: scale(1.05);
+} */

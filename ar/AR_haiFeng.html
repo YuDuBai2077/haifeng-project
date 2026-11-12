@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>「藕」遇红迹 · 海丰红色研学动线</title>
+<!-- 伪 AR 全景照片 -->
+<!-- ==========style======================================================================================================================== -->
+<style>
+  :root{
+    --accent:#ffb02e;
+    --bg:#0b0e12;
+    --text:#e8ecf1;
+    --text-sub:#9aa7b4;
+    --glass:rgba(12,16,20,.55);
+    --line:rgba(255,255,255,.16);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Microsoft YaHei",system-ui,sans-serif;
+    background:var(--bg);color:var(--text);
+    padding:20px 16px 40px;max-width:1180px;margin:0 auto;
+  }
+  header{margin:6px 4px 14px}
+  header h1{font-size:20px;font-weight:700;letter-spacing:.5px}
+  header p{font-size:13px;color:var(--text-sub);margin-top:4px}
+
+  /* ============ 舞台 ============ */
+  .stage{
+    position:relative;height:min(72vh,660px);border-radius:16px;overflow:hidden;
+    background:transparent;border:1px solid var(--line);
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    touch-action:none;
+  }
+  .stage.editing{cursor:crosshair}
+
+  /* 平移画布：图片放大铺满并留出环视余量，箭头锚在图片坐标系里随动 */
+  #plane{
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);
+    will-change:transform;
+    cursor:grab;
+  }
+  #plane.dragging{cursor:grabbing}
+  #plane img{
+    display:block;width:100%;height:100%;
+    user-select:none;-webkit-user-drag:none;pointer-events:none;
+  }
+  #plane.hidden{display:none}
+
+  /* 模糊占位层：切场景前先铺放大模糊的同图，加载完成后淡出 */
+  #blurLayer{
+    position:absolute;inset:0;z-index:3;pointer-events:none;
+    background-size:cover;background-position:center;
+    filter:blur(26px) brightness(.75);transform:scale(1.15);
+    opacity:0;transition:opacity .55s ease;
+  }
+  #blurLayer.on{opacity:1}
+
+  .vignette{
+    position:absolute;inset:0;z-index:4;pointer-events:none;
+    background:
+      linear-gradient(180deg,rgba(0,0,0,.42),transparent 18%,transparent 84%,rgba(0,0,0,.5)),
+      radial-gradient(120% 90% at 50% 50%,transparent 62%,rgba(0,0,0,.28));
+  }
+
+  /* ============ 顶部罗盘刻度带 ============ */
+  .tape{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:6;
+    width:min(520px,72vw);height:36px;overflow:hidden;border-radius:9px;
+    background:var(--glass);backdrop-filter:blur(6px);border:1px solid var(--line);
+  }
+  #tapeStrip{position:absolute;top:0;left:50%;height:100%;will-change:transform}
+  .tick{position:absolute;bottom:6px;width:1px;height:7px;background:rgba(255,255,255,.35)}
+  .tick.major{height:12px;width:1.5px;background:rgba(255,255,255,.7)}
+  .tick-label{
+    position:absolute;top:2px;transform:translateX(-50%);
+    font-size:11px;color:rgba(255,255,255,.85);font-weight:700;letter-spacing:1px;
+  }
+  .tick-label.deg{font-size:9px;color:rgba(255,255,255,.45);font-weight:400}
+  .tape-center{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:2;
+    width:0;height:0;border:5px solid transparent;border-top-color:var(--accent);
+  }
+
+  /* ============ 到站提示 ============ */
+  #toast{
+    position:absolute;top:58px;left:50%;transform:translate(-50%,-6px);z-index:6;
+    padding:7px 16px;border-radius:20px;font-size:13px;font-weight:600;
+    background:rgba(255,176,46,.92);color:#221703;
+    opacity:0;transition:.4s;pointer-events:none;white-space:nowrap;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* ============ 角落指北针 ============ */
+  #compass{
+    position:absolute;left:16px;bottom:16px;z-index:6;width:58px;height:58px;border-radius:50%;
+    background:var(--glass);backdrop-filter:blur(6px);border:1px solid var(--line);
+  }
+  #needle{
+    position:absolute;left:50%;top:50%;width:2.5px;height:40px;margin:-20px 0 0 -1.25px;
+    background:linear-gradient(180deg,var(--accent) 50%,rgba(255,255,255,.35) 50%);
+    clip-path:polygon(50% 0,100% 14%,50% 8%,0 14%);
+    will-change:transform;
+  }
+  #compass .n{
+    position:absolute;top:2px;left:50%;transform:translateX(-50%);
+    font-size:9px;color:var(--accent);font-weight:700;
+  }
+
+  /* ============ 朝向读数 ============ */
+  #readout{
+    position:absolute;right:16px;bottom:18px;z-index:6;
+    font-size:12px;color:rgba(255,255,255,.8);letter-spacing:.5px;
+    background:var(--glass);backdrop-filter:blur(6px);
+    padding:5px 10px;border-radius:7px;border:1px solid var(--line);
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* ============ 取点模式 ============ */
+  #pickBtn{
+    position:absolute;top:60px;right:14px;z-index:7;
+    border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(6px);
+    color:#c7cfd7;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;
+  }
+  #pickBtn.on{background:var(--accent);color:#221703;border-color:var(--accent);font-weight:700}
+  #pickOut{
+    position:absolute;top:96px;right:14px;z-index:7;display:none;
+    background:rgba(15,19,24,.85);border:1px solid var(--accent);border-radius:8px;
+    padding:8px 12px;font-size:12px;color:#ffd48a;line-height:1.7;
+    font-variant-numeric:tabular-nums;max-width:220px;
+  }
+  #pickOut.show{display:block}
+  #pickOut b{color:#fff;font-weight:600}
+
+  /* ============ 画面内指路箭头（锚定在照片坐标上） ============ */
+  .arrow-hs{
+    position:absolute;transform:translate(-50%,-50%);
+    width:120px;height:100px;cursor:pointer;z-index:5;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.55));
+  }
+  /* --dir 由 JS 按 targets[].dir 写入；旋转必须写进 keyframes，否则会被 bob 动画覆盖掉 */
+  .arrow-hs .chev{display:flex;justify-content:center;--dir:0deg;animation:bob 1.6s ease-in-out infinite}
+  .arrow-hs .chev svg{display:block}
+  .arrow-hs .chip{margin-top:4px;text-align:center}
+  .arrow-hs .chip span{
+    display:inline-block;padding:3px 12px;border-radius:14px;
+    background:rgba(15,19,24,.78);border:1px solid var(--accent);
+    color:var(--accent);font-size:12px;font-weight:700;white-space:nowrap;
+    backdrop-filter:blur(4px);
+  }
+  .arrow-hs:hover .chip span{background:var(--accent);color:#221703}
+  @keyframes bob{0%,100%{transform:rotate(var(--dir,0deg)) translateY(0)}50%{transform:rotate(var(--dir,0deg)) translateY(-6px)}}
+
+  /* 普通信息点 */
+  .info-hs{
+    position:absolute;transform:translate(-50%,-50%);
+    width:30px;height:30px;cursor:pointer;z-index:5;
+  }
+  .info-hs .dot{
+    width:30px;height:30px;border-radius:50%;
+    border:2px solid var(--accent);background:rgba(15,19,24,.7);
+    color:var(--accent);font-size:15px;font-weight:700;line-height:26px;text-align:center;
+  }
+
+  /* ============ 边缘方向指示 ============ */
+  .edge{
+    position:absolute;top:50%;transform:translateY(-50%);z-index:6;
+    width:44px;height:74px;border:none;background:var(--glass);
+    border:1px solid var(--line);backdrop-filter:blur(6px);
+    color:var(--accent);font-size:26px;cursor:pointer;
+    opacity:0;pointer-events:none;transition:opacity .25s;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  }
+  .edge.show{opacity:.92;pointer-events:auto}
+  .edge small{font-size:10px;color:#cfd6dd;max-width:38px;line-height:1.2}
+  #edgeL{left:0;border-radius:0 12px 12px 0}
+  #edgeR{right:0;border-radius:12px 0 0 12px}
+
+  /* 首次进入的「拖动环视」提示 */
+  .rot-hint{
+    position:absolute;top:50%;transform:translateY(-50%);z-index:5;
+    color:rgba(255,255,255,.55);font-size:34px;pointer-events:none;
+    animation:hint 1.8s ease-in-out infinite;transition:opacity .5s;
+  }
+  #hintL{left:10px}#hintR{right:10px}
+  .rot-hint.hide{opacity:0}
+  @keyframes hint{0%,100%{opacity:.25}50%{opacity:.75}}
+
+  /* ============ 底部站点条 ============ */
+  .stations{
+    position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:6;
+    display:flex;gap:8px;padding:6px;border-radius:22px;
+    background:var(--glass);backdrop-filter:blur(6px);border:1px solid var(--line);
+  }
+  .stations button{
+    border:none;border-radius:16px;padding:6px 14px;font-size:12px;font-weight:600;
+    background:transparent;color:#c7cfd7;cursor:pointer;transition:.2s;white-space:nowrap;
+  }
+  .stations button:hover{color:#fff}
+  .stations button.active{background:var(--accent);color:#221703}
+
+  /* ============ 说明区 ============ */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+  @media (max-width:820px){.cards{grid-template-columns:1fr}}
+  .card{
+    background:#12161c;border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+  }
+  .card h2{font-size:15px;color:var(--accent);margin-bottom:10px}
+  .card p,.card li{font-size:13px;line-height:1.85;color:#c4ccd5}
+  .card ul{padding-left:18px}
+  .card code{
+    background:#0b0e12;border:1px solid var(--line);border-radius:4px;
+    padding:1px 6px;font-size:12px;color:#ffd48a;
+  }
+  pre{
+    background:#0b0e12;border:1px solid var(--line);border-radius:8px;
+    padding:12px;font-size:12px;line-height:1.7;overflow-x:auto;color:#d9e1e9;
+    margin-top:8px;
+  }
+  pre b{color:#ffb02e;font-weight:600}
+  .tip{
+    margin-top:14px;padding:10px 14px;border-left:3px solid var(--accent);
+    background:rgba(255,176,46,.07);border-radius:0 8px 8px 0;
+    font-size:12.5px;color:#d8cfae;line-height:1.8;
+  }
+
+  @media (max-width:640px){
+    .stage{height:56vh}
+    .stations button{padding:5px 9px;font-size:11px}
+    .tape{width:82vw}
+    #compass{width:48px;height:48px}
+    #needle{height:34px;margin:-17px 0 0 -1.25px}
+  }
+</style>
+</head>
+<!-- ==========body======================================================================================================================== -->
+<body>
+
+<header>
+  <h1 id="docTitle">伪 AR 照片导览</h1>
+  <p id="docSub">普通照片也能跑同一套交互：拖动环视（放大平移）· 罗盘随视角滑动 · 箭头锚在照片里的路口位置 · 点击切到下一个点位</p>
+</header>
+
+<div class="stage" id="stage">
+  <div id="plane">
+    <img id="photo" alt="">
+    <!-- 箭头/信息点由 JS 注入，坐标系 = 照片本身 -->
+  </div>
+  <div id="blurLayer" class="on"></div>
+  <div class="vignette"></div>
+
+  <div class="tape"><div id="tapeStrip"></div><div class="tape-center"></div></div>
+  <div id="toast"></div>
+  <div id="compass"><div id="needle"></div><span class="n">N</span></div>
+  <div id="readout">朝向 000°</div>
+
+  <!-- <button id="pickBtn">📍 取点模式（E）</button> -->
+  <div id="pickOut"></div>
+
+  <button class="edge" id="edgeL"><span>‹</span><small id="edgeLt"></small></button>
+  <button class="edge" id="edgeR"><span>›</span><small id="edgeRt"></small></button>
+  <div class="rot-hint" id="hintL">‹</div>
+  <div class="rot-hint" id="hintR">›</div>
+
+  <div class="stations" id="stations"></div>
+</div>
+
+
+<!-- ==========script========================================================================================================================= -->
+<script>
+/* 1 全局设置 —— 标题、主色、环视手感，都可以直接改这 6 行 */
+const CFG = {
+  title:    '「藕」遇红迹 · 海丰红色研学动线',   // （伪AR演示）页面大标题
+  subtitle: '七个研学点位 · 拖动环视 · 点击箭头切站',    //：红宫红场 → 彭湃故居 → 得趣书室 → 赤山约农会 → 海丰总农会 → 屿见农场 → 陶南村英家列祠  · 按 E 取点
+  bg:       'transparent',   // 页面背景色（整页底色，也是舞台区露出的底色）rgba(246, 255, 247,.35)
+  text:     '#0b0e12',   // 大标题 + 正文文字颜色
+  textSub:  '#9aa7b4',   // 副标题（灰色说明那行）颜色
+  start:    's1',        // 从哪个点位进站（填 ROUTE 里的 id）
+  accent:   '#ff7a45',   // 主色：箭头、罗盘、指示针、高亮都用它
+  zoom:     1.35,        // 照片放大倍率＝环视余量。1.2 更清晰但转得少；1.6 转得多但边缘更糊
+  yawRange: 35           // 左右拖到底时罗盘转多少度。要和 zoom 一起调
+};
+document.documentElement.style.setProperty('--accent', CFG.accent);
+document.documentElement.style.setProperty('--bg',      CFG.bg);
+document.documentElement.style.setProperty('--text',    CFG.text);
+document.documentElement.style.setProperty('--text-sub', CFG.textSub);
+const tEl = document.getElementById('docTitle'), sEl = document.getElementById('docSub');
+if (tEl) tEl.textContent = CFG.title;   // 标题/副标题被注释掉时跳过，别让整页脚本中断
+if (sEl) sEl.textContent = CFG.subtitle;
+
+/* 2 路线配置 —— 换图、加点位、挪箭头、写讲解词，全改这里             
+  动线：红宫红场 → 彭湃故居 → 得趣书室 → 赤山约农会 → 海丰总农会 → 屿见农场 → 陶南村英家列祠（线性动线，箭头锚在各点位的大门/门楼上） */
+const ROUTE = {
+  s1: { name:'第1站 · 红宫红场旧址', img:'assets/red/h1.jpg', heading:0,
+        targets:[ {scene:'s2', x:78, y:55, dir:0,    label:'下一站 · 彭湃故居'},
+                  {scene:'h1_1', x:51, y:76, dir:0,  label:'前进'} ]},
+
+  s2: { name:'第2站 · 彭湃烈士故居', img:'assets/sh2.jpg', heading:45,
+        targets:[ {scene:'s3', x:77, y:52, dir:0,    label:'下一站 · 得趣书室'},
+                  {scene:'s1', x:27, y:52, dir:0,  label:'上一站 · 红宫红场'},
+                  {scene:'h2_1', x:51, y:76, dir:0,  label:'进入大门'} ],
+        infos:[ {x:62, y:75, text:'故居门匾与免费开放时间牌（占位讲解词）'} ] },
+        
+  s3: { name:'第3站 · 得趣书室', img:'assets/s3.jpg', heading:90,
+        targets:[ {scene:'s4', x:80, y:48, dir:0,    label:'下一站 · 赤山约农会'},
+                  {scene:'s2', x:20, y:50, dir:0,  label:'上一站 · 彭湃故居'},
+                  {scene:'h3_1', x:50, y:58, dir:0,    label:'进入大门'}, ],
+        infos:[ {x:50, y:46, text:'门匾「得趣书室」：彭湃从事革命活动的地方（占位讲解词）'} ] },
+
+  s4: { name:'第4站 · 赤山约农会旧址', img:'assets/s4.jpg', heading:135,
+        targets:[ {scene:'s5', x:67, y:60, dir:0,    label:'下一站 · 海丰总农会'},
+                  {scene:'s3', x:27, y:60, dir:0,  label:'上一站 · 得趣书室'} ],
+        infos:[ {x:66, y:40, text:'广东省重点文物保护单位标志碑（占位讲解词）'} ] },
+
+  s5: { name:'第5站 · 海丰总农会旧址', img:'assets/s5.jpg', heading:180,
+        targets:[ {scene:'s6', x:71, y:58, dir:0,    label:'下一站 · 屿见农场'},
+                  {scene:'s4', x:24, y:58, dir:0,  label:'上一站 · 赤山约农会旧址'} ],
+        infos:[ {x:47, y:43, text:'海丰总农会：1922年彭湃在此建立（占位讲解词）'} ] },
+
+  s6: { name:'第6站 · 屿见农场', img:'assets/s6.JPG', heading:120,
+        targets:[ {scene:'s7', x:71, y:58, dir:0,    label:'下一站 · 陶南村英家列祠'},
+                  {scene:'s5', x:28, y:62, dir:0,  label:'上一站 · 海丰总农会旧址'},
+                  {scene:'h6_1', x:50, y:58, dir:0,    label:'进入大门'}, ],},
+
+  s7: { name:'第7站 · 陶南村英家列祠', img:'assets/s7.jpg', heading:90,
+        targets:[ {scene:'s1', x:78, y:53, dir:0,    label:'打卡完成 · 返回起点'},
+                  {scene:'s6', x:22, y:53, dir:0,  label:'上一站 · 屿见农场'},
+                  {scene:'h7_1', x:50, y:58, dir:0,    label:'进入大门'}, ],},
+
+
+
+  h1_1: { name:'红宮大门外', img:'assets/red/h1_1.jpg', heading:0,
+        targets:[ {scene:'s1', x:47, y:55, dir:0,    label:'返回'},
+                  {scene:'h1_2', x:20, y:55, dir:0,    label:'红宫大门'} ]
+        },
+  h1_2: { name:'红宫大门', img:'assets/red/h1_2.jpg', heading:0,
+        targets:[ {scene:'h1_1', x:74, y:67, dir:0,    label:'返回'},
+                  {scene:'h1_3', x:50, y:60, dir:0,    label:'进入'},
+                  {scene:'h1_3_1', x:40, y:65, dir:0,    label:'左转'} ],
+        infos:[ {x:73, y:53, text:'红宫：1927年海丰县苏维埃政权在此宣告成立（占位讲解词，换成访谈内容）'}, ],
+        },
+  h1_3: { name:'红宮前', img:'assets/red/h1_3.jpg', heading:0,
+        targets:[ {scene:'h1_2', x:67, y:48, dir:0,    label:'返回'},
+                  {scene:'h1_4_0132', x:50, y:40, dir:0,    label:'前进'},
+                  {scene:'h1_5', x:35, y:40, dir:0,    label:'绕道而行'} ],
+        },
+  h1_3_1: { name:'红宮前湖边外围', img:'assets/red/h1_3_1.jpg', heading:0,
+        targets:[ {scene:'h1_2', x:75, y:50, dir:0,    label:'返回'},
+                  {scene:'h1_3_2', x:50, y:61, dir:0,    label:'靠近湖边'} ],
+        },
+  h1_3_2: { name:'红宮湖边', img:'assets/red/h1_3_2.jpg', heading:0,
+        targets:[ {scene:'h1_3_1', x:70, y:50, dir:0,    label:'返回'},
+                  {scene:'h1_3_3_0132', x:33, y:46, dir:0,    label:'红宮'} ],
+        },
+
+  h1_3_3_0130: { name:'红宮', img:'assets/red/h1_3_3.jpg', heading:0,
+        targets:[ {scene:'h1_3', x:47, y:55, dir:0,    label:'返回'},
+                  {scene:'h1_4_0130', x:50, y:77, dir:0,    label:'进入红宮'} ],
+        },
+  h1_3_3_0132: { name:'红宮', img:'assets/red/h1_3_3.jpg', heading:0,
+        targets:[ {scene:'h1_3_2', x:74, y:46, dir:0,    label:'返回'},
+                  {scene:'h1_4_0132', x:50, y:65, dir:0,    label:'进入红宮'},
+                  {scene:'h1_5', x:26, y:61, dir:0,    label:'绕道而行'} ],
+        },
+
+  h1_4_0130: { name:'红宮内部', img:'assets/red/h1_4.jpg', heading:0,
+        targets:[ {scene:'h1_3_3_0130', x:73, y:55, dir:0,    label:'返回'},
+                  {scene:'h1_5', x:26, y:55, dir:0,    label:'前进'} ],
+        },
+  h1_4_0132: { name:'红宮内部', img:'assets/red/h1_4.jpg', heading:0,
+        targets:[ {scene:'h1_3_3_0132', x:73, y:55, dir:0,    label:'返回'},
+                  {scene:'h1_5', x:26, y:55, dir:0,    label:'前进'} ],
+        },
+  
+  h1_5: { name:'红宮门外', img:'assets/red/h1_5.jpg', heading:0,
+        targets:[ {scene:'h1_2', x:47, y:55, dir:0,    label:'返回'},
+                  {scene:'h1_5_1', x:67, y:42, dir:0,    label:'木棉花'} ],
+        },
+  h1_5_1: { name:'木棉花', img:'assets/red/h1_5_1.jpg', heading:0,
+        targets:[ {scene:'h1_2', x:21, y:51, dir:0,    label:'返回'},
+                  {scene:'s2', x:78, y:53, dir:0,    label:'下一站 · 彭湃故居'} ],
+        infos:[ {x:51, y:51, text:'木棉花：「英雄花」'}, ],
+        },
+
+
+
+  h2_1: { name:'彭湃烈士故居大门', img:'assets/h2_1.jpg', heading:45,
+        targets:[ {scene:'s2', x:47, y:55, dir:0,    label:'返回'},
+                  {scene:'h2_2', x:50, y:77, dir:0,    label:'彭湃烈士故居内部'} ],
+        },
+  h2_2: { name:'彭湃烈士故居内部', img:'assets/h2_2.jpg', heading:45,
+        targets:[ {scene:'h2_1', x:35, y:56, dir:0,    label:'返回'},
+                  {scene:'s3', x:62, y:56, dir:0,    label:'下一站 · 得趣书室'},
+         ],
+        },
+
+
+
+  h3_1: { name:'得趣书室内', img:'assets/h3_1.jpg', heading:45,
+        targets:[ {scene:'s3', x:40, y:65, dir:0,    label:'返回'},
+                  {scene:'s4', x:64, y:65, dir:0,    label:'下一站 · 赤山约农会'},
+         ],
+        },
+
+  h4_1: {},
+  h5_1: {},
+
+  h6_1: { name:'印象陶河', img:'assets/h6_1.jpg', heading:110,
+        targets:[ {scene:'s6', x:30, y:55, dir:0,    label:'返回'},
+                  {scene:'h6_2', x:66, y:58, dir:0,    label:'亲子菜园'},
+                  {scene:'h6_3_01', x:78, y:58, dir:0,    label:'池畔派对'} ],
+        },
+  h6_2: { name:'亲子菜园外', img:'assets/h6_2.jpg', heading:90,
+        targets:[ {scene:'h6_1', x:30, y:45, dir:0,    label:'返回'} ,
+                  {scene:'h6_2_1', x:55, y:66, dir:0,    label:'进入大门'}, ],
+        },
+  h6_2_1: { name:'亲子菜园', img:'assets/h6_2_1.JPG', heading:90,
+        targets:[ {scene:'h6_2', x:30, y:57, dir:0,    label:'返回'} ,
+                  {scene:'h6_3_02', x:65, y:57, dir:0,    label:'池畔派对'}, ],
+        },
+  h6_3_01: { name:'池畔派对', img:'assets/h6_3.jpg', heading:45,
+        targets:[ {scene:'h6_1', x:50, y:56, dir:0,    label:'返回'},
+                  {scene:'s7', x:75, y:40, dir:0,    label:'下一站 · 陶南村英家列祠'}
+         ],
+        },
+  h6_3_02: { name:'池畔派对', img:'assets/h6_3.jpg', heading:45,
+        targets:[ {scene:'h6_2_1', x:50, y:56, dir:0,    label:'返回'},
+                  {scene:'s7', x:75, y:40, dir:0,    label:'下一站 · 陶南村英家列祠'}
+         ],
+        },
+
+
+
+  h7_1: { name:'颜氏家祠', img:'assets/h7_1.jpg', heading:145,
+        targets:[ {scene:'s7', x:75, y:52, dir:0,    label:'返回'},
+                  {scene:'h7_2', x:47, y:65, dir:0,    label:'进入归仁堂'}, ],
+        },
+  h7_2: { name:'归仁堂', img:'assets/h7_2.jpg', heading:145,
+        targets:[ {scene:'h7_1', x:20, y:60, dir:0,    label:'返回'},
+                  {scene:'h7_3', x:80, y:60, dir:0,    label:'归仁堂的一角'}, ],
+        },
+  h7_3: { name:'归仁堂的一角', img:'assets/h7_3.jpg', heading:180,
+        targets:[ {scene:'h7_2', x:70, y:55, dir:0,    label:'返回'}, ],
+        }
+};
+const ORDER = ['s1','s2','s3','s4','s5','s6','s7'];
+let current = CFG.start;
+
+/* 这两个值已挪到顶部 CFG 里：CFG.zoom / CFG.yawRange */
+
+/* ================= DOM屎 ================= */
+const stage = document.getElementById('stage');
+const plane = document.getElementById('plane');
+const photo = document.getElementById('photo');
+const blurLayer = document.getElementById('blurLayer');
+const toastEl = document.getElementById('toast');
+const stationsEl = document.getElementById('stations');
+const strip = document.getElementById('tapeStrip');
+const needle = document.getElementById('needle');
+const readout = document.getElementById('readout');
+const edgeL = document.getElementById('edgeL'), edgeR = document.getElementById('edgeR');
+const edgeLt = document.getElementById('edgeLt'), edgeRt = document.getElementById('edgeRt');
+const pickBtn = document.getElementById('pickBtn');
+const pickOut = document.getElementById('pickOut');
+
+/* ================= 罗盘刻度带 ================= */
+const PX = 2.2;
+for(let d=-360; d<=720; d+=15){
+  const x = (d+360)*PX, m = ((d%360)+360)%360;
+  const t = document.createElement('i');
+  t.className = 'tick' + (m%45===0 ? ' major' : '');
+  t.style.left = x + 'px';
+  strip.appendChild(t);
+  if(m%90===0){
+    const name = {0:'北',90:'东',180:'南',270:'西'}[m];
+    const lb = document.createElement('span');
+    lb.className = 'tick-label';
+    lb.style.left = x + 'px';
+    lb.textContent = name;
+    strip.appendChild(lb);
+    const dg = document.createElement('span');
+    dg.className = 'tick-label deg';
+    dg.style.left = x + 'px';
+    dg.style.top = '18px';
+    dg.textContent = m + '°';
+    strip.appendChild(dg);
+  }
+}
+
+/* ================= 站点条 ================= */
+ORDER.forEach(id=>{
+  const b = document.createElement('button');
+  b.textContent = ROUTE[id].name.split(' · ')[1] || ROUTE[id].name;
+  b.onclick = ()=>go(id);
+  b.dataset.scene = id;
+  stationsEl.appendChild(b);
+});
+function markStation(){
+  document.querySelectorAll('.stations button').forEach(b=>
+    b.classList.toggle('active', b.dataset.scene === current));
+}
+
+/* ================= 到站提示 ================= */
+let toastTimer;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 2200);
+}
+
+/* ================= 箭头 / 信息点渲染（锚在照片坐标系里） ================= */
+const CHEV = '<svg width="46" height="20" viewBox="0 0 46 20"><path d="M4 17 L23 4 L42 17" fill="none" stroke="#ffb02e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function renderHotspots(id){
+  plane.querySelectorAll('.arrow-hs,.info-hs').forEach(n=>n.remove());
+  const s = ROUTE[id];
+  (s.targets||[]).forEach(t=>{
+    const el = document.createElement('div');
+    el.className = 'arrow-hs';
+    el.style.left = t.x + '%';
+    el.style.top  = t.y + '%';
+    el.innerHTML =
+      '<div class="chev" style="--dir:' + (t.dir||0) + 'deg">' + CHEV + '</div>' +
+      '<div class="chip"><span>' + t.label + ' →</span></div>';
+    el.dataset.tx = t.x; el.dataset.scene = t.scene; el.dataset.label = t.label;
+    plane.appendChild(el);
+  });
+  (s.infos||[]).forEach(t=>{
+    const el = document.createElement('div');
+    el.className = 'info-hs';
+    el.style.left = t.x + '%';
+    el.style.top  = t.y + '%';
+    el.innerHTML = '<div class="dot">i</div>';
+    el.dataset.text = t.text;
+    plane.appendChild(el);
+  });
+}
+
+/* ================= 布局：按舞台尺寸计算画布大小与平移范围 ================= */
+let sw=0, sh=0, pw=0, ph=0, maxX=0, maxY=0;
+function layout(){
+  const r = stage.getBoundingClientRect();
+  sw = r.width; sh = r.height;
+  const ir = photo.naturalWidth / photo.naturalHeight;
+  if(ir > sw/sh){ ph = sh*CFG.zoom; pw = ph*ir; }
+  else          { pw = sw*CFG.zoom; ph = pw/ir; }
+  plane.style.width  = pw + 'px';
+  plane.style.height = ph + 'px';
+  maxX = (pw - sw)/2;
+  /* 竖版照片垂直余量很大：给 70% 的可动范围，既能抬头/低头看全，又不至于变成滑图 */
+  maxY = (ph - sh)/2 * 0.7;
+  applyPan();
+}
+function applyPan(){
+  plane.style.transform = 'translate(-50%,-50%) translate3d(' + pan.x + 'px,' + pan.y + 'px,0)';
+}
+
+/* ================= 环视（拖拽平移） ================= */
+const pan = {x:0, y:0};
+let dragging=false, sx=0, sy=0, px0=0, py0=0, downHS=null, wasDrag=false;
+plane.addEventListener('pointerdown', e=>{
+  /* 按在箭头/信息点上也照样能拖；松手时几乎没动才当作点击（见 pointerup） */
+  downHS = e.target.closest('.arrow-hs,.info-hs');
+  wasDrag = false;
+  dragging = true; sx = e.clientX; sy = e.clientY; px0 = pan.x; py0 = pan.y;
+  plane.classList.add('dragging');
+  plane.setPointerCapture(e.pointerId);
+});
+plane.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  if(Math.abs(e.clientX-sx) + Math.abs(e.clientY-sy) > 6) wasDrag = true;   // 移动超阈值＝拖动，不是点击
+  pan.x = clamp(px0 + (e.clientX - sx), -maxX, maxX);
+  pan.y = clamp(py0 + (e.clientY - sy), -maxY, maxY);
+  applyPan();
+  hideHints();
+});
+['pointerup','pointercancel'].forEach(ev=>
+  plane.addEventListener(ev, ()=>{
+    dragging=false; plane.classList.remove('dragging');
+    /* 原地松手在热点上 → 触发热点的"点击"行为 */
+    if(ev==='pointerup' && downHS && !wasDrag && !picking){
+      if(downHS.classList.contains('arrow-hs')) go(downHS.dataset.scene);
+      else if(downHS.dataset.text) toast(downHS.dataset.text);
+    }
+    downHS = null;
+  }));
+const clamp = (v,a,b)=>Math.max(a, Math.min(b, v));
+
+/* ================= 每帧刷新 HUD ================= */
+const norm = d => ((d%360)+360)%360;
+function frame(){
+  if(pw>0){
+    /* 平移 → 视角偏角：往右拖 = 视线往左转 */
+    const off = maxX>0 ? pan.x/maxX : 0;
+    const h = norm((ROUTE[current].heading||0) - off*CFG.yawRange);
+    strip.style.transform = 'translateX(' + (-(h+360)*PX) + 'px)';
+    needle.style.transform = 'rotate(' + h + 'deg)';
+    readout.textContent = '朝向 ' + String(Math.round(h)).padStart(3,'0') + '°';
+
+    /* 视野外目标 → 边缘箭头 */
+    let L=null, R=null;
+    plane.querySelectorAll('.arrow-hs').forEach(el=>{
+      const fx = parseFloat(el.dataset.tx)/100;
+      const stageX = (sw/2 + pan.x - pw/2) + fx*pw;
+      if(stageX < -10 && (!L || stageX < L.sx)) L = {sx:stageX, fx, scene:el.dataset.scene, label:el.dataset.label};
+      if(stageX > sw+10 && (!R || stageX > R.sx)) R = {sx:stageX, fx, scene:el.dataset.scene, label:el.dataset.label};
+    });
+    edgeL.classList.toggle('show', !!L);
+    edgeR.classList.toggle('show', !!R);
+    if(L){ edgeL.dataset.fx = L.fx; edgeLt.textContent = L.label.replace('前往 ','').replace('返回 ',''); }
+    if(R){ edgeR.dataset.fx = R.fx; edgeRt.textContent = R.label.replace('前往 ','').replace('返回 ',''); }
+  }
+  requestAnimationFrame(frame);
+}
+edgeL.onclick = ()=>panTo(parseFloat(edgeL.dataset.fx));
+edgeR.onclick = ()=>panTo(parseFloat(edgeR.dataset.fx));
+function panTo(fx){
+  /* 平滑移动，让目标点居中 */
+  const target = clamp(pw/2 - fx*pw, -maxX, maxX);
+  const from = pan.x, t0 = performance.now(), D = 450;
+  (function step(t){
+    const k = Math.min(1,(t-t0)/D), e = 1-Math.pow(1-k,3);
+    pan.x = from + (target-from)*e;
+    applyPan();
+    if(k<1) requestAnimationFrame(step);
+  })(t0);
+}
+
+/* ================= 场景切换 ================= */
+let switching = false;
+function go(id){
+  if(id === current || switching) return;
+  switching = true;
+  const next = id;
+  const im = new Image();
+  blurLayer.style.backgroundImage = 'url(' + ROUTE[next].img + ')';
+  blurLayer.classList.add('on');
+  const done = ()=>{
+    if(current === next) { switching=false; return; }
+    current = next;
+    photo.src = ROUTE[next].img;
+    pan.x = 0; pan.y = 0;
+    photo.onload = ()=>{ layout(); renderHotspots(current); };
+    if(photo.complete) { layout(); renderHotspots(current); }
+    blurLayer.classList.remove('on');
+    markStation();
+    toast('已到达 · ' + ROUTE[current].name);
+    switching = false;
+  };
+  im.onload = done;
+  im.onerror = ()=>{ toast('图片加载失败：' + ROUTE[next].img); switching=false; };
+  im.src = ROUTE[next].img;
+  setTimeout(()=>{ if(switching) done(); }, 4000);   // 兜底
+}
+
+/* ================= 取点模式 ================= */
+let picking = false;
+function togglePick(force){
+  picking = force!==undefined ? force : !picking;
+  if(pickBtn){
+    pickBtn.classList.toggle('on', picking);
+    pickBtn.textContent = picking ? '📍 取点中…点击照片上的位置' : '📍 取点模式（E）';
+  }
+  stage.classList.toggle('editing', picking);
+}
+/* 取点按钮可能在 HTML 里被注释掉（隐藏功能），这里做空值保护，别让整段脚本中断 */
+if(pickBtn) pickBtn.onclick = ()=>togglePick();
+document.addEventListener('keydown', e=>{
+  if(e.key==='e' || e.key==='E') togglePick();
+});
+stage.addEventListener('click', e=>{
+  if(!picking) return;
+  if(e.target.closest('.arrow-hs,.info-hs,#pickBtn,#pickOut,.edge,.stations')) return;
+  const r = plane.getBoundingClientRect();
+  const x = (e.clientX - r.left)/r.width*100;
+  const y = (e.clientY - r.top)/r.height*100;
+  if(x<0 || x>100 || y<0 || y>100){ toast('点在照片范围外，往图片区域点'); return; }
+  pickOut.innerHTML = '<b>' + ROUTE[current].name + '</b><br>x = <b>' + x.toFixed(1) + '</b> &nbsp; y = <b>' + y.toFixed(1) + '</b><br>已同时打印到控制台（F12 查看）';
+  pickOut.classList.add('show');
+  console.log('[取点] ' + ROUTE[current].name + '  x:' + x.toFixed(1) + '  y:' + y.toFixed(1));
+  toast('x=' + x.toFixed(1) + '  y=' + y.toFixed(1));
+});
+
+/* ================= 提示 & 启动 ================= */
+function hideHints(){
+  const l = document.getElementById('hintL'), r = document.getElementById('hintR');
+  if(l) l.classList.add('hide');
+  if(r) r.classList.add('hide');
+}
+['pointerdown'].forEach(ev=>
+  stage.addEventListener(ev, hideHints, {once:true}));
+setTimeout(hideHints, 9000);
+
+blurLayer.style.backgroundImage = 'url(' + ROUTE[CFG.start].img + ')';
+photo.onload = ()=>{ layout(); renderHotspots(current); blurLayer.classList.remove('on'); };
+photo.onerror = ()=>{ toast('图片加载失败：' + ROUTE[CFG.start].img); };
+photo.src = ROUTE[CFG.start].img;
+setTimeout(()=>blurLayer.classList.remove('on'), 4000);
+window.addEventListener('resize', ()=>{ if(photo.naturalWidth) layout(); });
+requestAnimationFrame(frame);
+markStation();
+</script>
+
+</body>
+</html>
