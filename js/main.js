@@ -7,7 +7,7 @@ function goSearch(e) {
     const key = input.value.trim().toLowerCase();
 
     if (!key) {
-        alert("请输入要搜索的内容，例如：屿见农场、红宫、五烈士家祠");
+        alert("请输入要搜索的内容，例如：屿见农场、五烈士家祠");
         input.focus();
         return;
     }
@@ -18,11 +18,11 @@ function goSearch(e) {
             url: "farm/yujian.html",
             keywords: ["屿见农场", "农场", "农业", "体验", "休闲"]
         },
-        {
-            title: "红宫",
-            url: "spot/honggon.html",
-            keywords: ["红宫", "红色研学", "海陆丰革命", "红场", "景点"]
-        },
+        // {
+        //     title: "红宫",
+        //     url: "spot/honggon.html",
+        //     keywords: ["红宫", "红色研学", "海陆丰革命", "红场", "景点"]
+        // },
         {
             title: "五烈士家祠",
             url: "spot/wulieshi.html",
@@ -87,7 +87,7 @@ function goSearch(e) {
     if (result) {
         location.href = result.url;
     } else {
-        alert("未找到相关内容，请尝试搜索：屿见农场、红宫、五烈士家祠、陶河脆藕、石斛等关键词。");
+        alert("未找到相关内容，请尝试搜索：屿见农场、五烈士家祠、陶河脆藕、陶河石斛等关键词。");
         input.select();
     }
 }
